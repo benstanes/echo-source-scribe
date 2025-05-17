@@ -4,10 +4,13 @@ import { AgentRole, ChatMessage as ChatMessageType, AGENT_PROMPTS, generateId } 
 import ChatMessage from './ChatMessage';
 import AgentTyping from './AgentTyping';
 import SourceInput from './SourceInput';
+import ApiKeyInput from './ApiKeyInput';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { vectorStore } from '@/utils/vectorStore';
-import { fetchUrlContent } from '@/utils/fetchUrlContent';
+import { enhancedVectorStore } from '@/utils/enhancedVectorStore';
+import { enhancedFetchUrlContent } from '@/utils/enhancedFetchUrlContent';
+import { openAIService } from '@/utils/openAIService';
+import { toast } from '@/components/ui/sonner';
 
 const ChatInterface: React.FC = () => {
   const [messages, setMessages] = useState<ChatMessageType[]>([]);
@@ -15,13 +18,21 @@ const ChatInterface: React.FC = () => {
   const [currentUrl, setCurrentUrl] = useState<string | null>(null);
   const [isProcessingSource, setIsProcessingSource] = useState(false);
   const [isAgentTyping, setIsAgentTyping] = useState<AgentRole | null>(null);
+  const [apiKeySet, setApiKeySet] = useState(false);
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
   
   useEffect(() => {
-    // Add initial welcome message
-    addMessage(AgentRole.SYSTEM, AGENT_PROMPTS[AgentRole.SYSTEM]);
-  }, []);
+    // Check if API key is set
+    if (openAIService.hasApiKey()) {
+      setApiKeySet(true);
+    }
+    
+    // Add initial welcome message only when API key is set
+    if (apiKeySet && messages.length === 0) {
+      addMessage(AgentRole.SYSTEM, AGENT_PROMPTS[AgentRole.SYSTEM]);
+    }
+  }, [apiKeySet]);
   
   useEffect(() => {
     // Scroll to bottom when messages change
@@ -47,6 +58,11 @@ const ChatInterface: React.FC = () => {
   };
   
   const handleSourceSubmit = async (url: string) => {
+    if (!apiKeySet) {
+      toast.error("Please set your OpenAI API key first");
+      return;
+    }
+    
     setIsProcessingSource(true);
     setCurrentUrl(url);
     
@@ -61,7 +77,8 @@ const ChatInterface: React.FC = () => {
     await simulateAgentTyping(AgentRole.KNOWLEDGE_BASE);
     
     try {
-      const document = await fetchUrlContent(url);
+      // Use the enhanced fetch function that gets real content
+      const document = await enhancedFetchUrlContent(url);
       
       if (!document) {
         addMessage(AgentRole.KNOWLEDGE_BASE, `I couldn't process the URL: ${url}. Please check if it's correct and try again.`);
@@ -70,8 +87,8 @@ const ChatInterface: React.FC = () => {
         return;
       }
       
-      // Add to vector store
-      await vectorStore.addDocument(document);
+      // Add to enhanced vector store with real embeddings
+      await enhancedVectorStore.addDocument(document);
       
       addMessage(
         AgentRole.KNOWLEDGE_BASE, 
@@ -79,11 +96,18 @@ const ChatInterface: React.FC = () => {
         url
       );
       
+      // Generate a response from OpenAI about the document
+      const systemPrompt = `You are a helpful assistant that summarizes documents. Summarize the following document titled "${document.title}" in a few sentences.`;
+      const documentSummary = await openAIService.generateChatCompletion([
+        { role: "system", content: systemPrompt },
+        { role: "user", content: document.content.substring(0, 4000) } // Limit to 4000 chars
+      ], 0.5);
+      
       // Response Agent confirms
       await simulateAgentTyping(AgentRole.RESPONSE_AGENT);
       addMessage(
         AgentRole.RESPONSE_AGENT, 
-        `Great! I can now answer questions about the content from ${document.title}. What would you like to know about it?`
+        `Great! I've analyzed the content from ${document.title}. Here's a brief summary:\n\n${documentSummary}\n\nWhat would you like to know about it?`
       );
     } catch (error) {
       console.error('Error processing URL:', error);
@@ -97,6 +121,11 @@ const ChatInterface: React.FC = () => {
   const handleUserMessage = async (e: React.FormEvent) => {
     e.preventDefault();
     
+    if (!apiKeySet) {
+      toast.error("Please set your OpenAI API key first");
+      return;
+    }
+    
     if (!input.trim()) return;
     
     const userMessage = input.trim();
@@ -106,7 +135,7 @@ const ChatInterface: React.FC = () => {
     addMessage(AgentRole.USER, userMessage);
     
     // Check if there are any documents in the vector store
-    const documents = vectorStore.getDocuments();
+    const documents = enhancedVectorStore.getDocuments();
     
     if (documents.length === 0) {
       // If no documents, Source Manager asks for a source
@@ -121,33 +150,68 @@ const ChatInterface: React.FC = () => {
     // Response Agent processes the query
     await simulateAgentTyping(AgentRole.RESPONSE_AGENT, 2000);
     
-    // Search the vector store for relevant content
-    const searchResults = await vectorStore.search(userMessage);
-    
-    if (searchResults.length === 0) {
-      // If no relevant content found, try to ask for a new source
+    try {
+      // Search the vector store for relevant content
+      const searchResults = await enhancedVectorStore.search(userMessage);
+      
+      if (searchResults.length === 0) {
+        // If no relevant content found, try to ask for a new source
+        addMessage(
+          AgentRole.RESPONSE_AGENT, 
+          "I don't have enough information to answer your question based on my current knowledge sources. Could you provide another URL with information related to your question?"
+        );
+        return;
+      }
+      
+      // Build context from search results
+      const context = searchResults.map(result => `From ${result.title}: ${result.content}`).join("\n\n");
+      
+      // Use OpenAI to generate a response based on the search results
+      const systemPrompt = `You are a helpful AI assistant that answers questions based on the provided context. If the information to answer the question is not present in the context, suggest that the user provide another source of information. Always cite your sources.`;
+      
+      const aiResponse = await openAIService.generateChatCompletion([
+        { role: "system", content: systemPrompt },
+        { role: "user", content: `Context:\n${context}\n\nQuestion: ${userMessage}\n\nPlease answer the question based on the provided context. If you cannot answer the question with the given context, suggest that I provide another URL for more information.` }
+      ]);
+      
       addMessage(
         AgentRole.RESPONSE_AGENT, 
-        "I don't have enough information to answer your question based on my current knowledge sources. Could you provide another URL with information related to your question?"
+        aiResponse,
+        searchResults[0].url
       );
-      return;
+    } catch (error) {
+      console.error('Error generating response:', error);
+      addMessage(
+        AgentRole.RESPONSE_AGENT, 
+        "I'm sorry, I encountered an error while processing your request. Please try again later."
+      );
     }
-    
-    // Generate a response based on the search results
-    const sources = searchResults.map(result => result.title).join(", ");
-    const responseContent = searchResults.map(result => result.content).join("\n\n");
-    
-    addMessage(
-      AgentRole.RESPONSE_AGENT, 
-      `Based on information from ${sources}, here's what I found:\n\n${responseContent}`,
-      searchResults[0].url
-    );
   };
   
   const handleClearKnowledge = () => {
-    vectorStore.clear();
+    enhancedVectorStore.clear();
     addMessage(AgentRole.KNOWLEDGE_BASE, "I've cleared all knowledge sources from my memory. Please provide new URLs to learn from.");
   };
+  
+  // If API key is not set, show the API key input form
+  if (!apiKeySet) {
+    return (
+      <div className="flex flex-col h-full max-w-4xl mx-auto">
+        <div className="bg-white p-4 rounded-t-lg border-b border-gray-200">
+          <h1 className="text-2xl font-bold text-center bg-gradient-to-r from-purple-700 via-blue-600 to-teal-500 bg-clip-text text-transparent">
+            Multi-Agent Adaptive Chatbot
+          </h1>
+          <p className="text-center text-gray-500">
+            Provide web sources and ask questions. I'll learn dynamically from the sources you share.
+          </p>
+        </div>
+        
+        <div className="flex-1 flex items-center justify-center p-4 bg-gray-50">
+          <ApiKeyInput onApiKeySet={() => setApiKeySet(true)} />
+        </div>
+      </div>
+    );
+  }
   
   return (
     <div className="flex flex-col h-full max-w-4xl mx-auto">
