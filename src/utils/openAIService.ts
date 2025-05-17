@@ -1,6 +1,11 @@
-
-import { ChatCompletionMessageParam } from "openai/resources";
 import { SourceDocument } from './agentTypes';
+
+// Define the ChatCompletionMessageParam type locally since we can't import it from openai/resources
+interface ChatCompletionMessageParam {
+  role: "system" | "user" | "assistant" | "function" | "tool";
+  content: string;
+  name?: string;
+}
 
 // This class handles communication with OpenAI API
 export class OpenAIService {
