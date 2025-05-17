@@ -1,3 +1,4 @@
+
 import type { Config } from "tailwindcss";
 
 export default {
@@ -61,6 +62,13 @@ export default {
 					'accent-foreground': 'hsl(var(--sidebar-accent-foreground))',
 					border: 'hsl(var(--sidebar-border))',
 					ring: 'hsl(var(--sidebar-ring))'
+				},
+				agent: {
+					source: '#6D28D9', // Purple for source manager
+					knowledge: '#2563EB', // Blue for knowledge base
+					response: '#14B8A6', // Teal for response agent
+					system: '#6B7280', // Gray for system messages
+					user: '#111827', // Near black for user messages
 				}
 			},
 			borderRadius: {
@@ -84,11 +92,25 @@ export default {
 					to: {
 						height: '0'
 					}
+				},
+				'typing': {
+					'0%': { width: '0%' },
+					'20%': { width: '20%' },
+					'40%': { width: '40%' },
+					'60%': { width: '60%' },
+					'80%': { width: '80%' },
+					'100%': { width: '100%' }
+				},
+				'bounce': {
+					'0%, 100%': { transform: 'translateY(0)' },
+					'50%': { transform: 'translateY(-5px)' }
 				}
 			},
 			animation: {
 				'accordion-down': 'accordion-down 0.2s ease-out',
-				'accordion-up': 'accordion-up 0.2s ease-out'
+				'accordion-up': 'accordion-up 0.2s ease-out',
+				'typing': 'typing 1.5s ease-out infinite',
+				'bounce': 'bounce 1s ease-in-out infinite'
 			}
 		}
 	},
