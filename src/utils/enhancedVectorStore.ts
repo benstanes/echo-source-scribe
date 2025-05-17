@@ -76,7 +76,8 @@ export class EnhancedVectorStore {
           // Calculate cosine similarity
           const similarity = this.cosineSimilarity(queryEmbedding, vector);
           
-          if (similarity > 0.7) { // Threshold for relevance
+          // Lowered threshold to be more inclusive (was 0.7)
+          if (similarity > 0.5) {
             results.push({
               content: chunk,
               url: document.url,
@@ -85,6 +86,36 @@ export class EnhancedVectorStore {
             });
           }
         }
+      }
+      
+      // If no results with similarity > 0.5, get top 3 chunks regardless of similarity
+      if (results.length === 0 && this.documents.length > 0) {
+        const allResults: { content: string, url: string, title: string, similarity: number }[] = [];
+        
+        for (const document of this.documents) {
+          if (!document.vectors) continue;
+          
+          for (let i = 0; i < document.chunks.length; i++) {
+            const chunk = document.chunks[i];
+            const vector = document.vectors[i];
+            
+            if (!vector) continue;
+            
+            const similarity = this.cosineSimilarity(queryEmbedding, vector);
+            allResults.push({
+              content: chunk,
+              url: document.url,
+              title: document.title,
+              similarity: similarity
+            });
+          }
+        }
+        
+        // Return top 3 results regardless of similarity score
+        return allResults
+          .sort((a, b) => b.similarity - a.similarity)
+          .slice(0, 3)
+          .map(({ content, url, title }) => ({ content, url, title }));
       }
       
       // Sort by similarity score and return top results
@@ -120,6 +151,7 @@ export class EnhancedVectorStore {
           }
         }
         
+        // Include chunks with any matching term
         if (score > 0) {
           results.push({
             content: chunk,
@@ -129,6 +161,18 @@ export class EnhancedVectorStore {
           });
         }
       }
+    }
+    
+    // If no results but we have documents, return a sample from the first document
+    if (results.length === 0 && this.documents.length > 0) {
+      const firstDoc = this.documents[0];
+      return [
+        {
+          content: firstDoc.chunks[0] || "Content from document",
+          url: firstDoc.url,
+          title: firstDoc.title
+        }
+      ];
     }
     
     return results

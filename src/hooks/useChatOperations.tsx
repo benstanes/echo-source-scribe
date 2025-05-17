@@ -120,11 +120,23 @@ export const useChatOperations = (apiKeySet: boolean) => {
       // Search the vector store for relevant content
       const searchResults = await enhancedVectorStore.search(message);
       
+      // Even if search returns no results, we'll try to use the document content directly
       if (searchResults.length === 0) {
-        // If no relevant content found, try to ask for a new source
+        const firstDoc = documents[0];
+        const docContext = `From ${firstDoc.title}: ${firstDoc.chunks.slice(0, 3).join("\n\n")}`;
+        
+        // Use OpenAI to generate a response based on the document
+        const systemPrompt = `You are a helpful AI assistant that answers questions based on the provided context. Try to answer the question with the information available. If you cannot provide a specific answer, extract any relevant information that might be helpful and suggest what other information might be needed.`;
+        
+        const aiResponse = await openAIService.generateChatCompletion([
+          { role: "system", content: systemPrompt },
+          { role: "user", content: `Context:\n${docContext}\n\nQuestion: ${message}\n\nPlease try to answer the question based on the provided context. If you have limited information, share what you can determine from the context.` }
+        ]);
+        
         addMessage(
           AgentRole.RESPONSE_AGENT, 
-          "I don't have enough information to answer your question based on my current knowledge sources. Could you provide another URL with information related to your question?"
+          aiResponse,
+          firstDoc.url
         );
         return;
       }
@@ -133,11 +145,11 @@ export const useChatOperations = (apiKeySet: boolean) => {
       const context = searchResults.map(result => `From ${result.title}: ${result.content}`).join("\n\n");
       
       // Use OpenAI to generate a response based on the search results
-      const systemPrompt = `You are a helpful AI assistant that answers questions based on the provided context. If the information to answer the question is not present in the context, suggest that the user provide another source of information. Always cite your sources.`;
+      const systemPrompt = `You are a helpful AI assistant that answers questions based on the provided context. If the information to answer the question is not complete in the context, try your best to provide a useful answer with what's available. Always cite your sources.`;
       
       const aiResponse = await openAIService.generateChatCompletion([
         { role: "system", content: systemPrompt },
-        { role: "user", content: `Context:\n${context}\n\nQuestion: ${message}\n\nPlease answer the question based on the provided context. If you cannot answer the question with the given context, suggest that I provide another URL for more information.` }
+        { role: "user", content: `Context:\n${context}\n\nQuestion: ${message}\n\nPlease answer the question based on the provided context. The information might be incomplete, but provide the best answer you can with what's available.` }
       ]);
       
       addMessage(

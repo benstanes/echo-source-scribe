@@ -1,4 +1,3 @@
-
 import { SourceDocument, generateId } from './agentTypes';
 
 /**
@@ -75,16 +74,37 @@ function extractTextFromHtml(html: string): string {
 
 /**
  * Splits content into chunks suitable for embedding
+ * Modified to create smaller, more focused chunks for better retrieval
  */
 function chunkContent(content: string): string[] {
-  // Simple chunking by splitting on paragraphs and limiting chunk size
+  // Create smaller chunks (300 chars) with more overlap (100 chars) for better context matching
   const paragraphs = content.split('\n\n');
   const chunks: string[] = [];
   
   let currentChunk = '';
+  const maxChunkSize = 300; // Reduced from 500
+  const overlap = 100; // Increased overlap for better context
   
   for (const paragraph of paragraphs) {
-    if (currentChunk.length + paragraph.length > 500) {
+    // If paragraph itself is too long, split it further
+    if (paragraph.length > maxChunkSize) {
+      const sentences = paragraph.split(/(?<=\.|\?|\!) /);
+      let sentenceChunk = '';
+      
+      for (const sentence of sentences) {
+        if (sentenceChunk.length + sentence.length > maxChunkSize) {
+          chunks.push(sentenceChunk);
+          // Keep some overlap with previous chunk
+          sentenceChunk = sentenceChunk.split(' ').slice(-overlap/10).join(' ') + ' ' + sentence;
+        } else {
+          sentenceChunk += (sentenceChunk ? ' ' : '') + sentence;
+        }
+      }
+      
+      if (sentenceChunk) {
+        chunks.push(sentenceChunk);
+      }
+    } else if (currentChunk.length + paragraph.length > maxChunkSize) {
       chunks.push(currentChunk);
       currentChunk = paragraph;
     } else {
@@ -96,7 +116,7 @@ function chunkContent(content: string): string[] {
     chunks.push(currentChunk);
   }
   
-  return chunks.length > 0 ? chunks : [content]; // Ensure at least one chunk
+  return chunks.length > 0 ? chunks : [content.substring(0, maxChunkSize)]; // Ensure at least one chunk
 }
 
 /**
@@ -121,7 +141,12 @@ function getFallbackContent(url: string): SourceDocument | null {
       content = `This is simulated content from ${domain}. The page might contain articles, product information, or other text that would be relevant to user queries.`;
     }
     
-    const chunks = [content];
+    // Create multiple chunks for better testing
+    const chunks = [
+      `${content} - Part 1: Introduction and overview.`,
+      `${content} - Part 2: Details and specifications.`,
+      `${content} - Part 3: Additional information and examples.`
+    ];
     
     return {
       id: generateId(),
