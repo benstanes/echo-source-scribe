@@ -1,4 +1,3 @@
-
 import { useState } from 'react';
 import { AgentRole, ChatMessage as ChatMessageType, AGENT_PROMPTS, generateId } from '@/utils/agentTypes';
 import { enhancedVectorStore } from '@/utils/enhancedVectorStore';
@@ -73,7 +72,7 @@ export const useChatOperations = (apiKeySet: boolean) => {
       const systemPrompt = `You are a helpful assistant that summarizes documents. Summarize the following document titled "${document.title}" in a few sentences.`;
       const documentSummary = await openAIService.generateChatCompletion([
         { role: "system", content: systemPrompt },
-        { role: "user", content: document.content.substring(0, 4000) } // Limit to 4000 chars
+        { role: "user", content: document.content.substring(0, 6000) } // Increased content limit for better context
       ], 0.5);
       
       // Response Agent confirms
@@ -120,42 +119,36 @@ export const useChatOperations = (apiKeySet: boolean) => {
       // Search the vector store for relevant content
       const searchResults = await enhancedVectorStore.search(message);
       
-      // Even if search returns no results, we'll try to use the document content directly
-      if (searchResults.length === 0) {
-        const firstDoc = documents[0];
-        const docContext = `From ${firstDoc.title}: ${firstDoc.chunks.slice(0, 3).join("\n\n")}`;
-        
-        // Use OpenAI to generate a response based on the document
-        const systemPrompt = `You are a helpful AI assistant that answers questions based on the provided context. Try to answer the question with the information available. If you cannot provide a specific answer, extract any relevant information that might be helpful and suggest what other information might be needed.`;
-        
-        const aiResponse = await openAIService.generateChatCompletion([
-          { role: "system", content: systemPrompt },
-          { role: "user", content: `Context:\n${docContext}\n\nQuestion: ${message}\n\nPlease try to answer the question based on the provided context. If you have limited information, share what you can determine from the context.` }
-        ]);
-        
-        addMessage(
-          AgentRole.RESPONSE_AGENT, 
-          aiResponse,
-          firstDoc.url
-        );
-        return;
+      // Always use the document content, either from search results or directly
+      let context = "";
+      
+      // If search returns results, use them
+      if (searchResults.length > 0) {
+        context = searchResults.map(result => `From ${result.title}: ${result.content}`).join("\n\n");
+      } else {
+        // If no search results, use content from all documents
+        context = documents.flatMap(doc => 
+          doc.chunks.slice(0, 5).map(chunk => `From ${doc.title}: ${chunk}`)
+        ).join("\n\n");
       }
       
-      // Build context from search results
-      const context = searchResults.map(result => `From ${result.title}: ${result.content}`).join("\n\n");
-      
-      // Use OpenAI to generate a response based on the search results
-      const systemPrompt = `You are a helpful AI assistant that answers questions based on the provided context. If the information to answer the question is not complete in the context, try your best to provide a useful answer with what's available. Always cite your sources.`;
+      // Use OpenAI to generate a response based on the available context
+      const systemPrompt = `You are a helpful AI assistant that answers questions based on the provided context.
+      Your goal is to provide accurate, detailed answers using ONLY the information in the context.
+      If the exact answer isn't in the context, try to provide the most relevant information available.
+      Don't say you don't have enough information or suggest providing more URLs.
+      Instead, work with what you have to give the most helpful response possible.
+      If truly nothing relevant is available, summarize what is known from the context.`;
       
       const aiResponse = await openAIService.generateChatCompletion([
         { role: "system", content: systemPrompt },
-        { role: "user", content: `Context:\n${context}\n\nQuestion: ${message}\n\nPlease answer the question based on the provided context. The information might be incomplete, but provide the best answer you can with what's available.` }
-      ]);
+        { role: "user", content: `Context:\n${context}\n\nQuestion: ${message}\n\nProvide a detailed answer based ONLY on the information in the context.` }
+      ], 0.7, "gpt-4o"); // Using a higher temperature and most capable model
       
       addMessage(
         AgentRole.RESPONSE_AGENT, 
         aiResponse,
-        searchResults[0].url
+        searchResults.length > 0 ? searchResults[0].url : documents[0].url
       );
     } catch (error) {
       console.error('Error generating response:', error);

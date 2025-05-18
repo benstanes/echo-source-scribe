@@ -22,10 +22,10 @@ export async function enhancedFetchUrlContent(url: string): Promise<SourceDocume
     const titleMatch = html.match(/<title>(.*?)<\/title>/i);
     const title = titleMatch ? titleMatch[1] : url;
     
-    // Simple HTML to text conversion - a more robust solution would use a proper HTML parser
+    // Enhanced HTML to text conversion
     const content = extractTextFromHtml(html);
     
-    // Process the content into chunks for embedding
+    // Process the content into smaller chunks for better embedding
     const chunks = chunkContent(content);
     
     return {
@@ -45,17 +45,41 @@ export async function enhancedFetchUrlContent(url: string): Promise<SourceDocume
 }
 
 /**
- * Extract text content from HTML
+ * Extract text content from HTML - Improved extraction
  */
 function extractTextFromHtml(html: string): string {
   // Remove scripts, styles, and HTML comments
   let text = html
     .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, ' ')
     .replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, ' ')
-    .replace(/<!--[\s\S]*?-->/g, ' ');
+    .replace(/<!--[\s\S]*?-->/g, ' ')
+    .replace(/<nav\b[^<]*(?:(?!<\/nav>)<[^<]*)*<\/nav>/gi, ' ') // Remove navigation
+    .replace(/<footer\b[^<]*(?:(?!<\/footer>)<[^<]*)*<\/footer>/gi, ' '); // Remove footer
+
+  // Extract content from main, article, and content divs with higher priority
+  let mainContent = '';
+  const mainMatch = text.match(/<main[^>]*>([\s\S]*?)<\/main>/i);
+  const articleMatch = text.match(/<article[^>]*>([\s\S]*?)<\/article>/i);
+  const contentMatch = text.match(/<div[^>]*class="[^"]*content[^"]*"[^>]*>([\s\S]*?)<\/div>/i);
   
+  if (mainMatch) mainContent += mainMatch[1] + ' ';
+  if (articleMatch) mainContent += articleMatch[1] + ' ';
+  if (contentMatch) mainContent += contentMatch[1] + ' ';
+  
+  // If we found some main content, prioritize it but still keep the rest
+  const processedText = mainContent ? 
+    extractTextFromHtmlFragment(mainContent) + ' ' + extractTextFromHtmlFragment(text) : 
+    extractTextFromHtmlFragment(text);
+  
+  return processedText;
+}
+
+/**
+ * Helper function to extract text from HTML fragment
+ */
+function extractTextFromHtmlFragment(html: string): string {
   // Remove HTML tags and decode entities
-  text = text
+  let text = html
     .replace(/<[^>]*>/g, ' ')
     .replace(/&nbsp;/g, ' ')
     .replace(/&amp;/g, '&')
@@ -73,17 +97,17 @@ function extractTextFromHtml(html: string): string {
 }
 
 /**
- * Splits content into chunks suitable for embedding
+ * Splits content into smaller chunks suitable for embedding
  * Modified to create smaller, more focused chunks for better retrieval
  */
 function chunkContent(content: string): string[] {
-  // Create smaller chunks (300 chars) with more overlap (100 chars) for better context matching
+  // Create even smaller chunks with more overlap for better context matching
   const paragraphs = content.split('\n\n');
   const chunks: string[] = [];
   
   let currentChunk = '';
-  const maxChunkSize = 300; // Reduced from 500
-  const overlap = 100; // Increased overlap for better context
+  const maxChunkSize = 250; // Further reduced from 300
+  const overlap = 150; // Increased overlap for better context
   
   for (const paragraph of paragraphs) {
     // If paragraph itself is too long, split it further
@@ -94,7 +118,7 @@ function chunkContent(content: string): string[] {
       for (const sentence of sentences) {
         if (sentenceChunk.length + sentence.length > maxChunkSize) {
           chunks.push(sentenceChunk);
-          // Keep some overlap with previous chunk
+          // Keep more overlap with previous chunk
           sentenceChunk = sentenceChunk.split(' ').slice(-overlap/10).join(' ') + ' ' + sentence;
         } else {
           sentenceChunk += (sentenceChunk ? ' ' : '') + sentence;
@@ -116,7 +140,15 @@ function chunkContent(content: string): string[] {
     chunks.push(currentChunk);
   }
   
-  return chunks.length > 0 ? chunks : [content.substring(0, maxChunkSize)]; // Ensure at least one chunk
+  // Ensure we have chunks by using the whole content if needed
+  if (chunks.length === 0) {
+    // Split content into chunks of maxChunkSize with overlap
+    for (let i = 0; i < content.length; i += maxChunkSize - overlap) {
+      chunks.push(content.substring(i, Math.min(i + maxChunkSize, content.length)));
+    }
+  }
+  
+  return chunks;
 }
 
 /**

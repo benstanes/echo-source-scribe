@@ -1,4 +1,3 @@
-
 import { SourceDocument } from './agentTypes';
 import { openAIService } from './openAIService';
 import { toast } from '@/components/ui/sonner';
@@ -76,8 +75,8 @@ export class EnhancedVectorStore {
           // Calculate cosine similarity
           const similarity = this.cosineSimilarity(queryEmbedding, vector);
           
-          // Lowered threshold to be more inclusive (was 0.7)
-          if (similarity > 0.5) {
+          // Reduced threshold to be much more inclusive (was 0.5, now 0.3)
+          if (similarity > 0.3) {
             results.push({
               content: chunk,
               url: document.url,
@@ -88,7 +87,8 @@ export class EnhancedVectorStore {
         }
       }
       
-      // If no results with similarity > 0.5, get top 3 chunks regardless of similarity
+      // If no results with similarity > 0.3, return ALL chunks from documents, regardless of similarity
+      // This ensures we always return content from our knowledge base
       if (results.length === 0 && this.documents.length > 0) {
         const allResults: { content: string, url: string, title: string, similarity: number }[] = [];
         
@@ -111,17 +111,18 @@ export class EnhancedVectorStore {
           }
         }
         
-        // Return top 3 results regardless of similarity score
+        // Return top 5 results regardless of similarity score (increased from 3)
         return allResults
           .sort((a, b) => b.similarity - a.similarity)
-          .slice(0, 3)
+          .slice(0, 5)
           .map(({ content, url, title }) => ({ content, url, title }));
       }
       
       // Sort by similarity score and return top results
+      // Increased from 3 to 5 results for more context
       return results
         .sort((a, b) => b.similarity - a.similarity)
-        .slice(0, 3)
+        .slice(0, 5)
         .map(({ content, url, title }) => ({ content, url, title }));
     } catch (error) {
       console.error("Error searching vector store:", error);
@@ -132,7 +133,7 @@ export class EnhancedVectorStore {
   }
   
   /**
-   * Simple keyword search as fallback method
+   * Simple keyword search as fallback method - improved to be more inclusive
    */
   private keywordSearch(query: string): { content: string, url: string, title: string }[] {
     const results: { content: string, url: string, title: string, score: number }[] = [];
@@ -151,33 +152,20 @@ export class EnhancedVectorStore {
           }
         }
         
-        // Include chunks with any matching term
-        if (score > 0) {
-          results.push({
-            content: chunk,
-            url: document.url,
-            title: document.title,
-            score: score / queryTerms.length
-          });
-        }
+        // Include ALL chunks with any matching term or just include all chunks if score is 0
+        results.push({
+          content: chunk,
+          url: document.url,
+          title: document.title,
+          score: score > 0 ? score / queryTerms.length : 0.1 // Give a small score to all chunks
+        });
       }
     }
     
-    // If no results but we have documents, return a sample from the first document
-    if (results.length === 0 && this.documents.length > 0) {
-      const firstDoc = this.documents[0];
-      return [
-        {
-          content: firstDoc.chunks[0] || "Content from document",
-          url: firstDoc.url,
-          title: firstDoc.title
-        }
-      ];
-    }
-    
+    // Return top 5 results (increased from 3)
     return results
       .sort((a, b) => b.score - a.score)
-      .slice(0, 3)
+      .slice(0, 5)
       .map(({ content, url, title }) => ({ content, url, title }));
   }
   
