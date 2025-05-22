@@ -1,0 +1,61 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Multi-Agent Adaptive Chatbot</title>
+  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+</head>
+<body>
+  <div class="app-container">
+    <div class="chat-container">
+      <!-- Chat Header -->
+      <div class="chat-header">
+        <h1>Multi-Agent Adaptive Chatbot</h1>
+        <p>Provide web sources and ask questions. I'll learn dynamically from the sources you share.</p>
+      </div>
+      
+      <!-- Chat Messages Area -->
+      <div class="chat-messages" id="chat-messages">
+        <!-- Messages will be added here dynamically -->
+      </div>
+      
+      <!-- API Key Input Area (initially visible) -->
+      <div class="api-key-container" id="api-key-container">
+        <div class="api-key-form">
+          <h2>Enter your OpenAI API Key</h2>
+          <p>Your API key is required to use this application. It is stored locally and never shared.</p>
+          <div class="input-group">
+            <input type="password" id="api-key-input" placeholder="sk-..." class="input">
+            <button id="api-key-submit" class="button">Submit</button>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Chat Input Area (initially hidden) -->
+      <div class="chat-input-area" id="chat-input-area" style="display: none;">
+        <div class="source-input-container">
+          <div class="input-group">
+            <input type="text" id="source-input" placeholder="Add a URL to learn from..." class="input">
+            <button id="source-submit" class="button">
+              <span id="source-button-text">Add Source</span>
+              <span id="source-loader" class="loader" style="display: none;"></span>
+            </button>
+          </div>
+        </div>
+        <div class="message-input-container">
+          <div class="input-group">
+            <input type="text" id="message-input" placeholder="Ask a question about your sources..." class="input">
+            <button id="message-submit" class="button">Send</button>
+            <button id="clear-knowledge" class="button button-outline">Clear Knowledge</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <script src="app.js"></script>
+</body>
+</html>

@@ -1,73 +1,92 @@
-# Welcome to your Lovable project
 
-## Project info
+# Multi-Agent Adaptive Chatbot
 
-**URL**: https://lovable.dev/projects/7f08cced-d265-4f5a-a018-c409b5b3a509
+This project implements a multi-agent chatbot system that can learn from web sources and answer questions based on that knowledge.
 
-## How can I edit this code?
+## Project Structure
 
-There are several ways of editing your application.
+The project consists of two main parts:
 
-**Use Lovable**
+### Backend (Python FastAPI)
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/7f08cced-d265-4f5a-a018-c409b5b3a509) and start prompting.
+- Located in the `backend/` directory
+- Implements the agent system using Python and FastAPI
+- Handles API requests, document processing, and OpenAI API integration
 
-Changes made via Lovable will be committed automatically to this repo.
+### Frontend (HTML, CSS, JavaScript)
 
-**Use your preferred IDE**
+- Located in the `frontend/` directory
+- Provides a responsive user interface for interacting with the chatbot
+- Communicates with the backend API
 
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
+## Setup Instructions
 
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
+### Backend Setup
 
-Follow these steps:
-
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
-
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
-
-# Step 3: Install the necessary dependencies.
-npm i
-
-# Step 4: Start the development server with auto-reloading and an instant preview.
-npm run dev
+1. Navigate to the backend directory:
+```
+cd backend
 ```
 
-**Edit a file directly in GitHub**
+2. Create a virtual environment:
+```
+python -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+```
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+3. Install dependencies:
+```
+pip install -r requirements.txt
+```
 
-**Use GitHub Codespaces**
+4. Run the FastAPI server:
+```
+uvicorn main:app --reload
+```
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+The backend API will be available at http://localhost:8000
 
-## What technologies are used for this project?
+### Frontend Setup
 
-This project is built with:
+1. Navigate to the frontend directory:
+```
+cd frontend
+```
 
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
+2. Serve the static files using any HTTP server. For example:
 
-## How can I deploy this project?
+Using Python:
+```
+python -m http.server 8080
+```
 
-Simply open [Lovable](https://lovable.dev/projects/7f08cced-d265-4f5a-a018-c409b5b3a509) and click on Share -> Publish.
+Using Node.js:
+```
+npx serve -p 8080
+```
 
-## Can I connect a custom domain to my Lovable project?
+The frontend will be available at http://localhost:8080
 
-Yes, you can!
+## Using the Application
 
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
+1. Open the frontend in your web browser
+2. Enter your OpenAI API key when prompted
+3. Add URLs to learn from using the source input
+4. Ask questions about the sources using the message input
+5. Clear knowledge sources if needed
 
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/tips-tricks/custom-domain#step-by-step-guide)
+## Features
+
+- Multi-agent architecture with specialized agents:
+  - Source Manager: Processes URLs
+  - Knowledge Base: Stores and retrieves information
+  - Response Agent: Generates answers
+- Dynamic learning from web sources
+- Vector-based search for relevant information retrieval
+- Responsive UI for desktop and mobile
+
+## Requirements
+
+- Python 3.8+
+- OpenAI API key
+- Modern web browser
